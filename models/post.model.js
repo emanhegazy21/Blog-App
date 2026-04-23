@@ -13,8 +13,7 @@ const postSchema = new mongoose.Schema(
     },
     images: [
       {
-        type: String,
-        required: true,
+        type: String
       },
     ],
     author: {
@@ -27,6 +26,12 @@ const postSchema = new mongoose.Schema(
       ref: 'Group',
       default: null,
     },
+    likes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
   },
   { timestamps: true }
 );

@@ -4,6 +4,7 @@ const cors = require('cors');
 
 const globalErrorHandler = require('./middleware/error.middleware');
 const notFoundMiddleware = require('./middleware/not-found.middleware');
+const { generalLimiter, authLimiter, createPostLimiter, createCommentLimiter } = require('./middleware/rate-limit.middleware');
 
 const authRouter = require('./routes/auth.route');
 const userRouter = require('./routes/user.route');
@@ -20,8 +21,11 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+app.use(generalLimiter);
 
-app.use('/api/v1/auth', authRouter);
+
+app.use('/api/v1/auth', authLimiter, authRouter);
+
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/posts', postRouter);
 app.use('/api/v1/groups', groupRouter);

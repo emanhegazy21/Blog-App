@@ -2,6 +2,26 @@ const Group = require("../models/group.model");
 const User = require("../models/user.model");
 const AppError = require("../utils/AppError");
 
+const isGroupAdmin = (group, userId) => {
+  return group.admins.some((a) =>
+    a._id ? a._id.toString() === userId : a.toString() === userId,
+  );
+};
+
+const checkGroupAdminAccess = (group, userId, userRole) => {
+  if (!isGroupAdmin(group, userId.toString()) && userRole !== "superadmin") {
+    throw new AppError(403, "Only group admins can perform this action");
+  }
+};
+
+const isGroupMember = (group, userId) => {
+  return group.members.some((m) => m.toString() === userId);
+};
+
+const hasPermission = (permissionsArray, userId) => {
+  return permissionsArray.some((u) => u.toString() === userId.toString());
+};
+
 const createGroup = async (data, requestingUser) => {
   const admins = data.admins
     ? [...new Set([...data.admins, requestingUser._id.toString()])]
@@ -25,27 +45,16 @@ const getGroupById = async (id) => {
   return group;
 };
 
-const isGroupAdmin = (group, userId) => {
-  return group.admins.some((a) =>
-    a._id ? a._id.toString() === userId : a.toString() === userId,
-  );
-};
-
 const addMember = async (groupId, userId, requestingUser) => {
   const group = await Group.findById(groupId);
   if (!group) throw new AppError(404, "Group not found");
 
-  if (
-    !isGroupAdmin(group, requestingUser._id.toString()) &&
-    requestingUser.role !== "superadmin"
-  ) {
-    throw new AppError(403, "Only group admins can add members");
-  }
+  checkGroupAdminAccess(group, requestingUser._id, requestingUser.role);
 
   const user = await User.findById(userId);
   if (!user) throw new AppError(404, "User not found");
 
-  if (group.members.some((m) => m.toString() === userId)) {
+  if (isGroupMember(group, userId)) {
     throw new AppError(400, "User is already a member");
   }
 
@@ -58,12 +67,7 @@ const removeMember = async (groupId, userId, requestingUser) => {
   const group = await Group.findById(groupId);
   if (!group) throw new AppError(404, "Group not found");
 
-  if (
-    !isGroupAdmin(group, requestingUser._id.toString()) &&
-    requestingUser.role !== "superadmin"
-  ) {
-    throw new AppError(403, "Only group admins can remove members");
-  }
+  checkGroupAdminAccess(group, requestingUser._id, requestingUser.role);
 
   group.members = group.members.filter((m) => m.toString() !== userId);
   group.permissions.canPost = group.permissions.canPost.filter(
@@ -77,18 +81,14 @@ const updatePermission = async (groupId, userId, canPost, requestingUser) => {
   const group = await Group.findById(groupId);
   if (!group) throw new AppError(404, "Group not found");
 
-  if (
-    !isGroupAdmin(group, requestingUser._id.toString()) &&
-    requestingUser.role !== "superadmin"
-  ) {
-    throw new AppError(403, "Only group admins can manage permissions");
+  checkGroupAdminAccess(group, requestingUser._id, requestingUser.role);
+
+  if (!isGroupMember(group, userId)) {
+    throw new AppError(400, "User is not a member of this group");
   }
 
-  const isMember = group.members.some((m) => m.toString() === userId);
-  if (!isMember) throw new AppError(400, "User is not a member of this group");
-
   if (canPost) {
-    if (!group.permissions.canPost.some((u) => u.toString() === userId)) {
+    if (!hasPermission(group.permissions.canPost, userId)) {
       group.permissions.canPost.push(userId);
     }
   } else {
@@ -105,23 +105,18 @@ const addAdmin = async (groupId, userId, requestingUser) => {
   const group = await Group.findById(groupId);
   if (!group) throw new AppError(404, "Group not found");
 
-  if (
-    !isGroupAdmin(group, requestingUser._id.toString()) &&
-    requestingUser.role !== "superadmin"
-  ) {
-    throw new AppError(403, "Only group admins can add other admins");
-  }
+  checkGroupAdminAccess(group, requestingUser._id, requestingUser.role);
 
   const user = await User.findById(userId);
   if (!user) throw new AppError(404, "User not found");
 
-  if (group.admins.some((a) => a.toString() === userId)) {
+  if (isGroupAdmin(group, userId)) {
     throw new AppError(400, "User is already an admin");
   }
 
   group.admins.push(userId);
 
-  if (!group.members.some((m) => m.toString() === userId)) {
+  if (!isGroupMember(group, userId)) {
     group.members.push(userId);
   }
   await group.save();

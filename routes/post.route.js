@@ -7,6 +7,7 @@ const {
   createPost,
   updatePost,
   deletePost,
+  likePost,
 } = require("../controllers/post.controller");
 
 const auth = require("../middleware/auth.middleware");
@@ -14,6 +15,10 @@ const validate = require("../middleware/validation.middleware");
 const { uploadCDN } = require("../middleware/upload.middleware");
 const uploadImageKit = require("../middleware/image-kit.middleware");
 const { createPostSchema, updatePostSchema } = require("../validations/post.validation");
+const { createPostLimiter } = require("../middleware/rate-limit.middleware");
+
+
+const commentRouter = require("./comment.route");
 
 router.use(auth);
 
@@ -21,9 +26,12 @@ router.get("/", getAllPosts);
 router.get("/user/:userId", getUserPosts);
 router.get("/:id", getPostById);
 
-// Create post with images
+router.post("/:id/like", likePost);
+
+// Create post with images (with rate limiting)
 router.post(
   "/",
+  createPostLimiter,
   uploadCDN.array("images", 10),
   uploadImageKit(true, "blog-posts"),
   validate(createPostSchema),
@@ -40,5 +48,8 @@ router.patch(
 );
 
 router.delete("/:id", deletePost);
+
+
+router.use("/:postId/comments", commentRouter);
 
 module.exports = router;
